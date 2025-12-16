@@ -5,8 +5,9 @@ import os
 from dataclasses import dataclass, field, asdict
 from typing import List, Tuple, Optional
 from TrainingModel import TrainingConfig, train_network
-from ChessLogic import DynamicChessNet
 from ChessDataset import ChessDataset
+from src.neural_network import NeuralNetwork, loss_functions, activation_functions
+
 
 @dataclass
 class Genome:
@@ -21,7 +22,7 @@ class Genome:
             learning_rate=self.learning_rate,
             batch_size=self.batch_size,
             hidden_layers=self.hidden_layers,
-            epochs=6
+            epochs=3
         )
     
     def to_dict(self) -> dict:
@@ -67,12 +68,10 @@ class GeneticOptimizer:
                 print(f"Individual {i+1} already evaluated (Fitness: {genome.fitness:.2f}%)")
                 continue
             print(f"\nTesting Individual {i+1}/{len(population)}: {genome.hidden_layers} | {genome.activation_fn} | LR: {genome.learning_rate:.5f}")
-            model = DynamicChessNet(
-                input_size=64, 
-                hidden_layers=genome.hidden_layers, 
-                output_size=4,
-                activation_fn=genome.activation_fn 
-            )
+            model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"])
+            for layer in genome.hidden_layers:
+                model.add_layer(layer, activation=activation_functions[genome.activation_fn])
+            model.add_layer(4, activation=activation_functions["softmax"])
             config = genome.to_config()
             try:
                 accuracy = train_network(model, dataset, config)
