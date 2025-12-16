@@ -2,11 +2,15 @@ import random
 import copy
 import json
 import os
+import sys
 from dataclasses import dataclass, field, asdict
 from typing import List, Tuple, Optional
 from TrainingModel import TrainingConfig, train_network
 from ChessDataset import ChessDataset
-from src.neural_network import NeuralNetwork, loss_functions, activation_functions
+
+parent_folder_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_folder_src)
+from neural_network import NeuralNetwork, loss_functions, activation_functions
 
 
 @dataclass
@@ -165,8 +169,8 @@ class GeneticOptimizer:
 if __name__ == "__main__":
     optimizer = GeneticOptimizer(save_file="evolution_state.json")
     print("Loading Chess Dataset...")
-    if os.path.exists("./dataset"):
-         full_dataset = ChessDataset("./dataset")
+    if os.path.exists("dataset"):
+         full_dataset = ChessDataset("dataset")
     else:
          print("No dataset folder found! Using FakeDataset for testing.")
          class FakeDataset:
