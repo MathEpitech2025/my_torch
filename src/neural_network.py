@@ -1,5 +1,5 @@
 import numpy as np
-from joblib import dump, load
+import pickle
 
 class ActivationFunction:
     def __init__(self, function, derivative):
@@ -144,7 +144,8 @@ class NeuralLayer:
 
 
 def load_neuralnetwork(filename):
-    return load(filename)
+    with open(filename, 'rb') as f:
+        return pickle.load(f)
 
 
 class NeuralNetwork:
@@ -180,5 +181,6 @@ class NeuralNetwork:
             output_gradient = layer.backpropagation(layer_input, output_gradient, learning_rate)
 
     def save(self, filename):
-        dump(self, filename)
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
 

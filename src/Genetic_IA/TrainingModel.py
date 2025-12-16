@@ -2,9 +2,14 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 from tqdm import tqdm
+import os
+import sys
 
 from ChessDataset import ChessDataset
-from src.neural_network import NeuralNetwork, loss_functions, activation_functions
+
+parent_folder_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_folder_src)
+from neural_network import NeuralNetwork, loss_functions, activation_functions
 
 
 @dataclass
@@ -80,7 +85,7 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
 if __name__ == "__main__":
     try:
         print("Loading dataset...")
-        dataset = ChessDataset("../../dataset")
+        dataset = ChessDataset("dataset")
         
         config = TrainingConfig(
             learning_rate=0.001,
