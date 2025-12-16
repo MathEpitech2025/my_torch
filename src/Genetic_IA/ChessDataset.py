@@ -1,6 +1,4 @@
-from os.path import split
-import torch
-from torch.utils.data import Dataset
+import numpy as np
 from typing import List, Tuple, Dict
 import os
 import glob
@@ -20,7 +18,7 @@ PIECE_TO_VAL: Dict[str, float] = {
 
 class ChessUtils:
     @staticmethod
-    def fen_to_tensor(fen: str) -> torch.Tensor:
+    def fen_to_array(fen: str) -> np.ndarray:
         board_str: str = fen.split(" ")[0]
         board_lines: List[str] = board_str.split("/")
         board_values: List[float] = []
@@ -33,10 +31,10 @@ class ChessUtils:
                     board_values.append(PIECE_TO_VAL.get(char, 0.0))
         if len(board_values) < 64:
             board_values.extend([0.0] * (64 - len(board_values)))
-        return torch.tensor(board_values[:64], dtype=torch.float32)
+        return np.array(board_values[:64], dtype=np.float32)
 
 
-class ChessDataset(Dataset):
+class ChessDataset:
     def __init__(self, root_dir: str) -> None:
         self.samples: List[Tuple[str, int]] = []
 
@@ -83,13 +81,12 @@ class ChessDataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> Tuple[np.ndarray, int]:
         fen, label_idx = self.samples[idx]
         try:
-            fen_tensor = ChessUtils.fen_to_tensor(fen)
-            label_tensor = torch.tensor(label_idx, dtype=torch.long)
-            return fen_tensor, label_tensor
+            fen_array = ChessUtils.fen_to_array(fen)
+            return fen_array, label_idx
         except Exception as e:
             print(f"Error converting FEN: {fen} -> {e}")
-            return torch.zeros(64, dtype=torch.float32), torch.tensor(0, dtype=torch.long)
+            return np.zeros(64, dtype=np.float32), 0
 
