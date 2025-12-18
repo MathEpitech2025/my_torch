@@ -74,7 +74,7 @@ class GeneticOptimizer:
             neurons = random.choice([32, 64, 128, 256])
             layers.append(neurons)
         acts = [random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid", "softmax", "default"]) for _ in range(num_layers)]
-        dropouts = random.uniform(0.0, 0.5) if num_layers > 1 else 0.0
+        dropouts = random.uniform(0.0, 0.2) if num_layers > 1 else 0.0
         
         return Genome(learning_rate=lr, batch_size=batch, hidden_layers=layers, activation_fns=acts, dropouts=dropouts)
 
@@ -160,7 +160,7 @@ class GeneticOptimizer:
                 idx = random.randint(0, len(genome.activation_fns) - 1)
                 genome.activation_fns[idx] = random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid", "softmax", "default"])
         if random.random() < self.mutation_rate:
-            genome.dropouts = random.uniform(0.0, 0.5)
+            genome.dropouts = random.uniform(0.0, 0.2)
 
     def evolve_generation(self, population: List[Genome], dataset: ChessDataset) -> List[Genome]:
         self.evaluate_population(population, dataset)
