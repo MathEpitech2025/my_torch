@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
         accuracy = train_network(model, dataset, config)
         print(f"Final Model Accuracy: {accuracy:.2f}%")
-        model.save("Chess.pkl")
+        model.save("Chess.nn")
         
     except Exception as e:
         print(f"Error during test: {e}")
