@@ -128,6 +128,5 @@ if __name__ == "__main__":
             accuracy, config.learning_rate = train_network(model, dataset, config)
             print(f"Accuracy: {accuracy:.2f}% | LR: {config.learning_rate:.6f}")
             model.save("Chess.pkl")
-
     except Exception as e:
         print(f"Error during test: {e}")
