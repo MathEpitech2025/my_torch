@@ -7,6 +7,7 @@ from dataclasses import dataclass, field, asdict
 from typing import List, Tuple, Optional
 from TrainingModel import TrainingConfig, train_network
 from ChessDataset import ChessDataset
+import numpy as np
 
 parent_folder_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_folder_src)
@@ -18,15 +19,22 @@ class Genome:
     learning_rate: float
     batch_size: int
     hidden_layers: List[int]
-    hidden_layers: List[int]
     activation_fns: List[str] = field(default_factory=lambda: ["relu"])
     fitness: float = 0.0
+    dropouts: float = None
+    optimizer: str = "sgd"
+    gradient_clip: float = None
+    lr_decay: float = 1.0
 
     def to_config(self) -> TrainingConfig:
         return TrainingConfig(
             learning_rate=self.learning_rate,
             batch_size=self.batch_size,
             hidden_layers=self.hidden_layers,
+            dropout_rate=self.dropouts,
+            optimizer=self.optimizer,
+            gradient_clip=self.gradient_clip,
+            lr_decay=self.lr_decay,
             epochs=3
         )
     
@@ -52,7 +60,11 @@ class Genome:
             batch_size=data["batch_size"],
             hidden_layers=hidden_layers,
             activation_fns=activation_fns,
-            fitness=data.get("fitness", 0.0)
+            fitness=data.get("fitness", 0.0),
+            dropouts=data.get("dropouts", 0.0),
+            optimizer=data.get("optimizer", "sgd"),
+            gradient_clip=data.get("gradient_clip", 0.0),
+            lr_decay=data.get("lr_decay", 1.0)
         )
 
 class GeneticOptimizer:
@@ -70,9 +82,22 @@ class GeneticOptimizer:
         for _ in range(num_layers):
             neurons = random.choice([32, 64, 128, 256])
             layers.append(neurons)
-        acts = [random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid", "softmax", "default"]) for _ in range(num_layers)]
-        
-        return Genome(learning_rate=lr, batch_size=batch, hidden_layers=layers, activation_fns=acts)
+        acts = [random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid"]) for _ in range(num_layers)]
+        dropouts = random.uniform(0.0, 0.2) if num_layers > 1 else 0.0
+        optimizer = random.choice(["sgd", "adam"])
+        gradient_clip = random.choice([None, 1.0, 5.0, 10.0])
+        lr_decay = random.uniform(0.95, 1.0)
+
+        return Genome(
+            learning_rate=lr,
+            batch_size=batch,
+            hidden_layers=layers,
+            activation_fns=acts,
+            dropouts=dropouts,
+            optimizer=optimizer,
+            gradient_clip=gradient_clip,
+            lr_decay=lr_decay
+        )
 
     def create_initial_population(self, pop_size: int = 10) -> List[Genome]:
         print(f"Genesis: Creating initial population of {pop_size} individuals...")
@@ -85,16 +110,16 @@ class GeneticOptimizer:
             if genome.fitness > 0:
                 print(f"Individual {i+1} already evaluated (Fitness: {genome.fitness:.2f}%)")
                 continue
-            print(f"\nTesting Individual {i+1}/{len(population)}: {genome.hidden_layers} | {genome.activation_fns} | LR: {genome.learning_rate:.5f}")
+            print(f"\nTesting Individual {i+1}/{len(population)}: {genome.hidden_layers} | {genome.activation_fns} | LR: {genome.learning_rate:.5f} | Opt: {genome.optimizer}")
             model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"])
-            
+
             for layer_size, act_name in zip(genome.hidden_layers, genome.activation_fns):
-                model.add_layer(layer_size, activation=activation_functions[act_name])
-                
-            model.add_layer(4, activation=activation_functions["softmax"])
+                model.add_layer(layer_size, activation=activation_functions[act_name], dropout_rate=genome.dropouts, optimizer=genome.optimizer)
+
+            model.add_layer(3, activation=activation_functions["softmax"], optimizer=genome.optimizer)
             config = genome.to_config()
             try:
-                accuracy = train_network(model, dataset, config)
+                accuracy, _ = train_network(model, dataset, config)
                 genome.fitness = accuracy
                 print(f"--> Score: {accuracy:.2f}%")
             except Exception as e:
@@ -113,6 +138,11 @@ class GeneticOptimizer:
         child_lr = random.choice([parent1.learning_rate, parent2.learning_rate])
         child_batch = random.choice([parent1.batch_size, parent2.batch_size])
         child_layers = copy.deepcopy(random.choice([parent1.hidden_layers, parent2.hidden_layers]))
+        child_dropouts = random.choice([parent1.dropouts, parent2.dropouts])
+        child_optimizer = random.choice([parent1.optimizer, parent2.optimizer])
+        child_gradient_clip = random.choice([parent1.gradient_clip, parent2.gradient_clip])
+        child_lr_decay = random.choice([parent1.lr_decay, parent2.lr_decay])
+
         if len(parent1.hidden_layers) == len(parent2.hidden_layers):
             child_acts = []
             for a1, a2 in zip(parent1.activation_fns, parent2.activation_fns):
@@ -124,10 +154,14 @@ class GeneticOptimizer:
                  child_acts = copy.deepcopy(parent2.activation_fns)
 
         return Genome(
-            learning_rate=child_lr, 
-            batch_size=child_batch, 
+            learning_rate=child_lr,
+            batch_size=child_batch,
             hidden_layers=child_layers,
-            activation_fns=child_acts
+            activation_fns=child_acts,
+            dropouts=child_dropouts,
+            optimizer=child_optimizer,
+            gradient_clip=child_gradient_clip,
+            lr_decay=child_lr_decay
         )
 
     def mutate(self, genome: Genome):
@@ -147,12 +181,21 @@ class GeneticOptimizer:
                 genome.activation_fns.pop()
             elif action == "add" and len(genome.hidden_layers) < 4:
                 genome.hidden_layers.append(random.choice([32, 64, 128]))
-                genome.activation_fns.append(random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid", "softmax", "default"]))
-                        
+                genome.activation_fns.append(random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid"]))
+
         if random.random() < self.mutation_rate:
             if len(genome.activation_fns) > 0:
                 idx = random.randint(0, len(genome.activation_fns) - 1)
-                genome.activation_fns[idx] = random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid", "softmax", "default"])
+                genome.activation_fns[idx] = random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid"])
+        if random.random() < self.mutation_rate:
+            genome.dropouts = random.uniform(0.0, 0.2)
+        if random.random() < self.mutation_rate:
+            genome.optimizer = random.choice(["sgd", "adam"])
+        if random.random() < self.mutation_rate:
+            genome.gradient_clip = random.choice([None, 1.0, 5.0, 10.0])
+        if random.random() < self.mutation_rate:
+            genome.lr_decay *= random.uniform(0.95, 1.05)
+            genome.lr_decay = max(0.9, min(1.0, genome.lr_decay))
 
     def evolve_generation(self, population: List[Genome], dataset: ChessDataset) -> List[Genome]:
         self.evaluate_population(population, dataset)
