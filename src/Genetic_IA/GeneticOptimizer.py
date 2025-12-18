@@ -21,12 +21,14 @@ class Genome:
     hidden_layers: List[int]
     activation_fns: List[str] = field(default_factory=lambda: ["relu"])
     fitness: float = 0.0
+    dropouts: float = None
 
     def to_config(self) -> TrainingConfig:
         return TrainingConfig(
             learning_rate=self.learning_rate,
             batch_size=self.batch_size,
             hidden_layers=self.hidden_layers,
+            dropout_rate=self.dropouts,
             epochs=3
         )
     
@@ -52,7 +54,8 @@ class Genome:
             batch_size=data["batch_size"],
             hidden_layers=hidden_layers,
             activation_fns=activation_fns,
-            fitness=data.get("fitness", 0.0)
+            fitness=data.get("fitness", 0.0),
+            dropouts=data.get("dropouts", 0.0)
         )
 
 class GeneticOptimizer:
@@ -71,8 +74,9 @@ class GeneticOptimizer:
             neurons = random.choice([32, 64, 128, 256])
             layers.append(neurons)
         acts = [random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid", "softmax", "default"]) for _ in range(num_layers)]
+        dropouts = random.uniform(0.0, 0.5) if num_layers > 1 else 0.0
         
-        return Genome(learning_rate=lr, batch_size=batch, hidden_layers=layers, activation_fns=acts)
+        return Genome(learning_rate=lr, batch_size=batch, hidden_layers=layers, activation_fns=acts, dropouts=dropouts)
 
     def create_initial_population(self, pop_size: int = 10) -> List[Genome]:
         print(f"Genesis: Creating initial population of {pop_size} individuals...")
@@ -89,7 +93,7 @@ class GeneticOptimizer:
             model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"])
             
             for layer_size, act_name in zip(genome.hidden_layers, genome.activation_fns):
-                model.add_layer(layer_size, activation=activation_functions[act_name])
+                model.add_layer(layer_size, activation=activation_functions[act_name], dropout_rate=genome.dropouts)
                 
             model.add_layer(4, activation=activation_functions["softmax"])
             config = genome.to_config()
@@ -113,6 +117,7 @@ class GeneticOptimizer:
         child_lr = random.choice([parent1.learning_rate, parent2.learning_rate])
         child_batch = random.choice([parent1.batch_size, parent2.batch_size])
         child_layers = copy.deepcopy(random.choice([parent1.hidden_layers, parent2.hidden_layers]))
+        child_dropouts = random.choice([parent1.dropouts, parent2.dropouts])
         if len(parent1.hidden_layers) == len(parent2.hidden_layers):
             child_acts = []
             for a1, a2 in zip(parent1.activation_fns, parent2.activation_fns):
@@ -127,7 +132,8 @@ class GeneticOptimizer:
             learning_rate=child_lr, 
             batch_size=child_batch, 
             hidden_layers=child_layers,
-            activation_fns=child_acts
+            activation_fns=child_acts,
+            dropouts=child_dropouts
         )
 
     def mutate(self, genome: Genome):
@@ -153,6 +159,8 @@ class GeneticOptimizer:
             if len(genome.activation_fns) > 0:
                 idx = random.randint(0, len(genome.activation_fns) - 1)
                 genome.activation_fns[idx] = random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid", "softmax", "default"])
+        if random.random() < self.mutation_rate:
+            genome.dropouts = random.uniform(0.0, 0.5)
 
     def evolve_generation(self, population: List[Genome], dataset: ChessDataset) -> List[Genome]:
         self.evaluate_population(population, dataset)
