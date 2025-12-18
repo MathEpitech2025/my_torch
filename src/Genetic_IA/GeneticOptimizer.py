@@ -18,7 +18,8 @@ class Genome:
     learning_rate: float
     batch_size: int
     hidden_layers: List[int]
-    activation_fn: str = "relu"
+    hidden_layers: List[int]
+    activation_fns: List[str] = field(default_factory=lambda: ["relu"])
     fitness: float = 0.0
 
     def to_config(self) -> TrainingConfig:
@@ -34,11 +35,23 @@ class Genome:
 
     @staticmethod
     def from_dict(data: dict) -> 'Genome':
+        hidden_layers = data["hidden_layers"]
+        if "activation_fns" in data:
+            activation_fns = data["activation_fns"]
+        else:
+            old_act = data.get("activation_fn", "relu")
+            activation_fns = [old_act] * len(hidden_layers)
+
+        if len(activation_fns) != len(hidden_layers):
+             while len(activation_fns) < len(hidden_layers):
+                 activation_fns.append("relu")
+             activation_fns = activation_fns[:len(hidden_layers)]
+
         return Genome(
             learning_rate=data["learning_rate"],
             batch_size=data["batch_size"],
-            hidden_layers=data["hidden_layers"],
-            activation_fn=data.get("activation_fn", "relu"),
+            hidden_layers=hidden_layers,
+            activation_fns=activation_fns,
             fitness=data.get("fitness", 0.0)
         )
 
@@ -50,15 +63,16 @@ class GeneticOptimizer:
 
     def generate_random_genome(self) -> Genome:
         lr = random.uniform(0.0001, 0.01)
-        power = random.randint(5, 11)
+        power = random.randint(6, 11)
         batch = 2 ** power
         num_layers = random.randint(1, 3)
         layers = []
         for _ in range(num_layers):
-            neurons = random.choice([32, 64, 128, 256, 512])
+            neurons = random.choice([32, 64, 128, 256])
             layers.append(neurons)
-        act = random.choice(["relu", "leaky_relu", "gelu", "tanh"])
-        return Genome(learning_rate=lr, batch_size=batch, hidden_layers=layers, activation_fn=act)
+        acts = [random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid", "softmax", "default"]) for _ in range(num_layers)]
+        
+        return Genome(learning_rate=lr, batch_size=batch, hidden_layers=layers, activation_fns=acts)
 
     def create_initial_population(self, pop_size: int = 10) -> List[Genome]:
         print(f"Genesis: Creating initial population of {pop_size} individuals...")
@@ -71,10 +85,12 @@ class GeneticOptimizer:
             if genome.fitness > 0:
                 print(f"Individual {i+1} already evaluated (Fitness: {genome.fitness:.2f}%)")
                 continue
-            print(f"\nTesting Individual {i+1}/{len(population)}: {genome.hidden_layers} | {genome.activation_fn} | LR: {genome.learning_rate:.5f}")
+            print(f"\nTesting Individual {i+1}/{len(population)}: {genome.hidden_layers} | {genome.activation_fns} | LR: {genome.learning_rate:.5f}")
             model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"])
-            for layer in genome.hidden_layers:
-                model.add_layer(layer, activation=activation_functions[genome.activation_fn])
+            
+            for layer_size, act_name in zip(genome.hidden_layers, genome.activation_fns):
+                model.add_layer(layer_size, activation=activation_functions[act_name])
+                
             model.add_layer(4, activation=activation_functions["softmax"])
             config = genome.to_config()
             try:
@@ -97,33 +113,46 @@ class GeneticOptimizer:
         child_lr = random.choice([parent1.learning_rate, parent2.learning_rate])
         child_batch = random.choice([parent1.batch_size, parent2.batch_size])
         child_layers = copy.deepcopy(random.choice([parent1.hidden_layers, parent2.hidden_layers]))
-        child_act = random.choice([parent1.activation_fn, parent2.activation_fn])
-        
+        if len(parent1.hidden_layers) == len(parent2.hidden_layers):
+            child_acts = []
+            for a1, a2 in zip(parent1.activation_fns, parent2.activation_fns):
+                child_acts.append(random.choice([a1, a2]))
+        else:
+             if child_layers == parent1.hidden_layers:
+                 child_acts = copy.deepcopy(parent1.activation_fns)
+             else:
+                 child_acts = copy.deepcopy(parent2.activation_fns)
+
         return Genome(
             learning_rate=child_lr, 
             batch_size=child_batch, 
             hidden_layers=child_layers,
-            activation_fn=child_act
+            activation_fns=child_acts
         )
 
     def mutate(self, genome: Genome):
         if random.random() < self.mutation_rate:
             genome.learning_rate *= random.uniform(0.8, 1.2)
         if random.random() < self.mutation_rate:
-            current_idx = [32, 64, 128, 256, 512, 1024, 2048].index(genome.batch_size) if genome.batch_size in [32, 64, 128, 256, 512, 1024, 2048] else 3
+            current_idx = [64, 128, 256, 512, 1024, 2048].index(genome.batch_size) if genome.batch_size in [64, 128, 256, 512, 1024, 2048] else 2
             move = random.choice([-1, 1])
-            new_idx = max(0, min(6, current_idx + move))
-            genome.batch_size = [32, 64, 128, 256, 512, 1024, 2048][new_idx]
+            new_idx = max(0, min(5, current_idx + move))
+            genome.batch_size = [64, 128, 256, 512, 1024, 2048][new_idx]
         if random.random() < self.mutation_rate:
             action = random.choice(["change", "add", "remove"])
             if action == "change" and len(genome.hidden_layers) > 0:
-                genome.hidden_layers[random.randint(0, len(genome.hidden_layers) - 1)] = random.choice([32, 64, 128, 256, 512])
+                genome.hidden_layers[random.randint(0, len(genome.hidden_layers) - 1)] = random.choice([32, 64, 128, 256])
             elif action == "remove" and len(genome.hidden_layers) > 1:
                 genome.hidden_layers.pop()
+                genome.activation_fns.pop()
             elif action == "add" and len(genome.hidden_layers) < 4:
                 genome.hidden_layers.append(random.choice([32, 64, 128]))
+                genome.activation_fns.append(random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid", "softmax", "default"]))
+                        
         if random.random() < self.mutation_rate:
-            genome.activation_fn = random.choice(["relu", "leaky_relu", "gelu", "tanh"])
+            if len(genome.activation_fns) > 0:
+                idx = random.randint(0, len(genome.activation_fns) - 1)
+                genome.activation_fns[idx] = random.choice(["relu", "leaky_relu", "gelu", "tanh", "sigmoid", "softmax", "default"])
 
     def evolve_generation(self, population: List[Genome], dataset: ChessDataset) -> List[Genome]:
         self.evaluate_population(population, dataset)
