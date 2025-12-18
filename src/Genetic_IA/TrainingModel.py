@@ -19,6 +19,7 @@ class TrainingConfig:
     epochs: int = 10
     hidden_layers: List[int] = field(default_factory=lambda: [64, 32])
     validation_split: float = 0.2
+    dropout_rate: float = 0.0
 
 def calculate_accuracy(model: NeuralNetwork, data: List[Tuple[np.ndarray, int]]) -> float:
     correct = 0
@@ -26,7 +27,7 @@ def calculate_accuracy(model: NeuralNetwork, data: List[Tuple[np.ndarray, int]])
 
     for inputs, label in data:
         inputs = inputs.reshape(1, -1)
-        output = model.feedforward(inputs)
+        output = model.feedforward(inputs, training=False)
         predicted = np.argmax(output, axis=1)[0]
         correct += int(predicted == label)
 
@@ -65,7 +66,7 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
             batch_targets = np.zeros((len(batch_labels), num_classes))
             batch_targets[np.arange(len(batch_labels)), batch_labels] = 1
 
-            outputs = model.feedforward(batch_inputs)
+            outputs = model.feedforward(batch_inputs, training=True)
             loss = model.loss_function(outputs, batch_targets)
             model.backpropagation(batch_targets, config.learning_rate)
 
@@ -92,12 +93,13 @@ if __name__ == "__main__":
             batch_size=1024,
             epochs=5,
             hidden_layers=[128, 64],
-            validation_split=0.2
+            validation_split=0.2,
+            dropout_rate=0.2
         )
 
         model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"])
         for layer in config.hidden_layers:
-            model.add_layer(layer, activation=activation_functions["relu"])
+            model.add_layer(layer, activation=activation_functions["relu"], dropout_rate=config.dropout_rate)
         model.add_layer(4, activation=activation_functions["softmax"])
 
         accuracy = train_network(model, dataset, config)
