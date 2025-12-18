@@ -112,7 +112,7 @@ loss_functions = {
 }
 
 class NeuralLayer:
-    def __init__(self, input_size: int, output_size: int, weights=None, activation: ActivationFunction = activation_functions["default"]):
+    def __init__(self, input_size: int, output_size: int, weights=None, activation: ActivationFunction = activation_functions["default"], dropout_rate=0.0):
         if weights is None:
             limit = np.sqrt(6 / (input_size + output_size))
             self.weights = np.random.uniform(-limit, limit, (input_size, output_size))
@@ -122,11 +122,24 @@ class NeuralLayer:
         self.activation = activation
         self.output_size = output_size
         self.input_size = input_size
+        self.dropout_rate = dropout_rate
+        self.mask = None
 
-    def feedforward(self, inputs):
-        return self.activation(np.dot(inputs, self.weights) + self.biases)
+    def feedforward(self, inputs, training=True):
+        z = np.dot(inputs, self.weights) + self.biases
+        output = self.activation(z)
+
+        if training and self.dropout_rate > 0:
+            self.mask = (np.random.rand(*output.shape) > self.dropout_rate) / (1.0 - self.dropout_rate)
+            output *= self.mask
+        else:
+            self.mask = None
+
+        return output
 
     def backpropagation(self, inputs, output_gradient, learning_rate):
+        if self.mask is not None:
+            output_gradient *= self.mask
         z = np.dot(inputs, self.weights) + self.biases
 
         activation_gradient = self.activation.derivative(z)
@@ -155,20 +168,20 @@ class NeuralNetwork:
         self.output_size = None
         self.loss_function = loss_function
 
-        self.layers = []
+        self.layers : list[NeuralLayer] = []
         self.layers_inputs = []
 
-    def feedforward(self, X):
+    def feedforward(self, X, training=True):
         self.layers_inputs = []
         for layer in self.layers:
             self.layers_inputs.append(X)
-            X = layer.feedforward(X)
+            X = layer.feedforward(X, training=training)
         self.predicted_output = X
         return self.predicted_output
 
-    def add_layer(self, layer_size, weight=None, activation: ActivationFunction = activation_functions["default"]):
+    def add_layer(self, layer_size, weight=None, activation: ActivationFunction = activation_functions["default"], dropout_rate=0.0):
         input_size = self.input_size if not self.layers else self.layers[-1].output_size
-        self.layers.append(NeuralLayer(input_size, layer_size, weight, activation))
+        self.layers.append(NeuralLayer(input_size, layer_size, weight, activation, dropout_rate))
         self.output_size = layer_size
 
     def backpropagation(self, targets, learning_rate):
