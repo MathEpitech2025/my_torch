@@ -57,7 +57,7 @@ class ChessAnalyzer:
             batch_X = data[i:i+batch_size]
             batch_Y = targets[i:i+batch_size]
             
-            output = self.model.feedforward(batch_X)
+            output = self.model.feedforward(batch_X, training=False)
             predicted_indices = np.argmax(output, axis=1)
             target_indices = np.argmax(batch_Y, axis=1)
             
@@ -164,8 +164,10 @@ class ChessAnalyzer:
             for i in range(0, len(X_curr), BATCH_SIZE):
                 batch_X = X_curr[i : i + BATCH_SIZE]
                 batch_Y = Y_curr[i : i + BATCH_SIZE]
-                self.model.feedforward(batch_X)
+                self.model.feedforward(batch_X, training=True)
                 self.model.backpropagation(batch_Y, LEARNING_RATE)
+
+            print(f"Epoch {epoch+1}/{EPOCHS} completed.", file=sys.stderr)
             
             if (epoch + 1) % 5 == 0:
                  val_acc = self._calculate_accuracy(X_val, Y_val)
