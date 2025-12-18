@@ -4,7 +4,6 @@ from typing import NoReturn, List, Tuple, Dict
 import numpy as np
 from fen_parser import FENParser
 import json
-# ... (imports)
 from fen_parser import FENParser
 import pickle
 LABEL_MAP: Dict[str, int] = {
