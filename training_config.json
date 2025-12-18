@@ -1,6 +1,6 @@
 {
-    "learning_rate": 0.01,
-    "batch_size": 32,
+    "learning_rate": 0.001,
+    "batch_size": 64,
     "epochs": 20,
     "validation_split": 0.1
 }
