@@ -9,7 +9,7 @@ from ChessDataset import ChessDataset
 
 parent_folder_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_folder_src)
-from neural_network import NeuralNetwork, loss_functions, activation_functions, load_neuralnetwork
+from neural_network import NeuralNetwork, loss_functions, activation_functions, load_neuralnetwork, to_cpu_array
 
 
 @dataclass
@@ -25,19 +25,38 @@ class TrainingConfig:
     gradient_clip: Optional[float] = None
     lr_decay: float = 1.0
 
-def calculate_accuracy(model: NeuralNetwork, data: List[Tuple[np.ndarray, int]]) -> float:
+def calculate_accuracy(model: NeuralNetwork, data: List[Tuple[np.ndarray, int]], batch_size: int = 2048) -> float:
+    xp = getattr(model, "xp", np)
     correct = 0
     total = len(data)
 
-    for inputs, label in data:
-        inputs = inputs.reshape(1, -1)
-        output = model.feedforward(inputs, training=False)
-        predicted = np.argmax(output, axis=1)[0]
-        correct += int(predicted == label)
+    if total == 0:
+        return 0.0
 
-    return (100 * correct / total) if total > 0 else 0.0
+    for start in range(0, total, batch_size):
+        end = min(start + batch_size, total)
+        batch_inputs = xp.asarray([item[0] for item in data[start:end]], dtype=xp.float32)
+        batch_labels = xp.asarray([item[1] for item in data[start:end]], dtype=xp.int32)
+
+        outputs = model.feedforward(batch_inputs, training=False)
+        outputs_cpu = to_cpu_array(outputs)
+        labels_cpu = to_cpu_array(batch_labels)
+        predicted = np.argmax(outputs_cpu, axis=1)
+        correct += int((predicted == labels_cpu).sum())
+
+    return 100 * correct / total
 
 def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingConfig) -> Tuple[float, float]:
+    xp = getattr(model, "xp", np)
+    print(f"Backend: {'GPU' if getattr(model, 'uses_gpu', False) else 'CPU'} (xp={xp.__name__})")
+    if getattr(model, "uses_gpu", False):
+        try:
+            import cupy as cp
+            dev_id = cp.cuda.runtime.getDevice()
+            props = cp.cuda.runtime.getDeviceProperties(dev_id)
+            print(f"GPU device: {props['name'].decode()} (id={dev_id})")
+        except Exception as e:
+            print(f"GPU device query failed: {e}")
     dataset_size = len(dataset)
     val_size = int(dataset_size * config.validation_split)
     train_size = dataset_size - val_size
@@ -50,6 +69,7 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
     val_data = [dataset[i] for i in val_indices]
 
     print(f"Data split: {train_size} training samples | {val_size} validation samples")
+    val_batch_size = max(256, min(config.batch_size, 4096))
 
     current_lr = config.learning_rate
     for epoch in range(config.epochs):
@@ -64,28 +84,29 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
             end_idx = min(start_idx + config.batch_size, len(train_data))
             batch = train_data[start_idx:end_idx]
 
-            batch_inputs = np.array([item[0] for item in batch])
-            batch_labels = np.array([item[1] for item in batch])
+            batch_inputs = xp.asarray([item[0] for item in batch], dtype=xp.float32)
+            batch_labels = xp.asarray([item[1] for item in batch], dtype=xp.int32)
 
             num_classes = model.output_size
-            batch_targets = np.zeros((len(batch_labels), num_classes))
-            batch_targets[np.arange(len(batch_labels)), batch_labels] = 1
+            batch_targets = xp.zeros((len(batch_labels), num_classes), dtype=xp.float32)
+            batch_targets[xp.arange(len(batch_labels)), batch_labels] = 1
 
             outputs = model.feedforward(batch_inputs, training=True)
-            loss = model.loss_function(outputs, batch_targets)
+            loss = model.loss_function(xp, outputs, batch_targets)
             model.backpropagation(batch_targets, current_lr, config.gradient_clip)
 
-            total_loss += loss
-            progress_bar.set_postfix(loss=loss, lr=current_lr)
+            loss_value = float(to_cpu_array(loss))
+            total_loss += loss_value
+            progress_bar.set_postfix(loss=loss_value, lr=current_lr)
 
         avg_loss = total_loss / num_batches
-        val_accuracy = calculate_accuracy(model, val_data)
+        val_accuracy = calculate_accuracy(model, val_data, batch_size=val_batch_size)
 
         print(f"Epoch {epoch + 1}/{config.epochs} - Loss: {avg_loss:.4f} - Validation Accuracy: {val_accuracy:.2f}% - LR: {current_lr:.6f}")
         current_lr *= config.lr_decay
 
     print("Training completed !")
-    final_score = calculate_accuracy(model, val_data)
+    final_score = calculate_accuracy(model, val_data, batch_size=val_batch_size)
     return final_score, current_lr
 
 
@@ -109,9 +130,9 @@ if __name__ == "__main__":
 
         if os.path.exists("Chess.pkl"):
             print("Loading existing model...")
-            model = load_neuralnetwork("Chess.pkl")
+            model = load_neuralnetwork("Chess.pkl", prefer_gpu=True)
         else:
-            model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"])
+            model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"], prefer_gpu=True)
             for i, layer in enumerate(config.hidden_layers):
                 dropout = config.dropout_rate if i < len(config.hidden_layers) - 1 else 0.0
                 model.add_layer(
