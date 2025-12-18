@@ -3,6 +3,7 @@ import copy
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass, field, asdict
 from typing import List, Tuple, Optional
 from TrainingModel import TrainingConfig, train_network
@@ -18,9 +19,9 @@ class Genome:
     learning_rate: float
     batch_size: int
     hidden_layers: List[int]
-    hidden_layers: List[int]
     activation_fns: List[str] = field(default_factory=lambda: ["relu"])
     fitness: float = 0.0
+    eval_time: float = 0.0
 
     def to_config(self) -> TrainingConfig:
         return TrainingConfig(
@@ -52,7 +53,8 @@ class Genome:
             batch_size=data["batch_size"],
             hidden_layers=hidden_layers,
             activation_fns=activation_fns,
-            fitness=data.get("fitness", 0.0)
+            fitness=data.get("fitness", 0.0),
+            eval_time=data.get("eval_time", 0.0)
         )
 
 class GeneticOptimizer:
@@ -83,7 +85,7 @@ class GeneticOptimizer:
         
         for i, genome in enumerate(population):
             if genome.fitness > 0:
-                print(f"Individual {i+1} already evaluated (Fitness: {genome.fitness:.2f}%)")
+                print(f"Individual {i+1} already evaluated (Fitness: {genome.fitness:.2f}% | Time: {genome.eval_time:.2f}s)")
                 continue
             print(f"\nTesting Individual {i+1}/{len(population)}: {genome.hidden_layers} | {genome.activation_fns} | LR: {genome.learning_rate:.5f}")
             model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"])
@@ -93,16 +95,20 @@ class GeneticOptimizer:
                 
             model.add_layer(4, activation=activation_functions["softmax"])
             config = genome.to_config()
+            start_time = time.perf_counter()
             try:
                 accuracy = train_network(model, dataset, config)
+                duration = time.perf_counter() - start_time
                 genome.fitness = accuracy
-                print(f"--> Score: {accuracy:.2f}%")
+                genome.eval_time = duration
+                print(f"--> Score: {accuracy:.2f}% | Time: {duration:.2f}s")
             except Exception as e:
                 print(f"--> Death by Error: {e}")
                 genome.fitness = 0.0
+                genome.eval_time = time.perf_counter() - start_time
 
     def select_best(self, population: List[Genome]) -> Tuple[List[Genome], List[Genome]]:
-        sorted_pop = sorted(population, key=lambda x: x.fitness, reverse=True)
+        sorted_pop = sorted(population, key=lambda g: (g.fitness, -g.eval_time), reverse=True)
         elites = sorted_pop[:self.elite_size]
         print(f"Elites preserved: Top {self.elite_size} with scores {[p.fitness for p in elites]}")
         top_50_percent = int(len(population) * 0.5)
