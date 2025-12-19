@@ -15,6 +15,7 @@ class NetworkConfig:
     dropout_rate: float = 0.0
     optimizer: str = "sgd"
     loss_function: str = "cross_entropy"
+    weight_decay: float = 0.0
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'NetworkConfig':
@@ -22,7 +23,7 @@ class NetworkConfig:
         filtered_data = {k: v for k, v in data.items() if k in valid_keys}
         if "dropouts" in data and "dropout_rate" not in filtered_data:
             filtered_data["dropout_rate"] = float(data["dropouts"])
-
+        
         return cls(**filtered_data)
 
 class NetworkGenerator:
@@ -48,7 +49,8 @@ class NetworkGenerator:
                 layer_size=size,
                 activation=act_fn,
                 dropout_rate=config.dropout_rate, 
-                optimizer=config.optimizer
+                optimizer=config.optimizer,
+                weight_decay=config.weight_decay
             )
             
         if config.output_activation not in activation_functions:
@@ -57,7 +59,8 @@ class NetworkGenerator:
         model.add_layer(
             layer_size=config.output_size,
             activation=activation_functions[config.output_activation],
-            optimizer=config.optimizer
+            optimizer=config.optimizer,
+            weight_decay=config.weight_decay
         )
         
         return model

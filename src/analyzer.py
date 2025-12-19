@@ -173,6 +173,14 @@ class ChessAnalyzer:
                      max_accuracy = val_acc
                  print(f"Epoch {epoch+1}/{EPOCHS} -> Current Val Accuracy: {val_acc:.2f}% (Max: {max_accuracy:.2f}%)", file=sys.stderr)
 
+            if (epoch + 1) % 10 == 0:
+                checkpoint_path = f"my_torch_network_epoch_{epoch+1}.nn"
+                try:
+                    self.model.save(checkpoint_path)
+                    print(f"Checkoutpoint saved to {checkpoint_path}", file=sys.stderr)
+                except Exception as e:
+                    print(f"Warning: Failed to save checkpoint: {e}", file=sys.stderr)
+
 
         save_path = self.args.save_file if self.args.save_file else self.args.load_file
         print(f"Saving trained model to {save_path}...", file=sys.stderr)
