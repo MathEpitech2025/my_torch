@@ -32,7 +32,7 @@ class ChessUtils:
                 if char.isdigit():
                     flat_board.extend(['.'] * int(char))
                 else:
-                    flat_board.append(char)s
+                    flat_board.append(char)
         if len(flat_board) < 64:
              flat_board.extend(['.'] * (64 - len(flat_board)))
         flat_board = flat_board[:64]
