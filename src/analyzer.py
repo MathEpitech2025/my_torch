@@ -153,6 +153,8 @@ class ChessAnalyzer:
         
         max_accuracy = 0.0
         
+        save_path = self.args.save_file if self.args.save_file else self.args.load_file
+        
         for epoch in range(EPOCHS):
             train_shuffle = np.arange(len(X_train))
             np.random.shuffle(train_shuffle)
@@ -174,16 +176,13 @@ class ChessAnalyzer:
                  print(f"Epoch {epoch+1}/{EPOCHS} -> Current Val Accuracy: {val_acc:.2f}% (Max: {max_accuracy:.2f}%)", file=sys.stderr)
 
             if (epoch + 1) % 10 == 0:
-                checkpoint_path = f"my_torch_network_epoch_{epoch+1}.nn"
+                print(f"Saving checkpoint to {save_path}...", file=sys.stderr)
                 try:
-                    self.model.save(checkpoint_path)
-                    print(f"Checkoutpoint saved to {checkpoint_path}", file=sys.stderr)
+                    self.model.save(save_path)
                 except Exception as e:
                     print(f"Warning: Failed to save checkpoint: {e}", file=sys.stderr)
 
-
-        save_path = self.args.save_file if self.args.save_file else self.args.load_file
-        print(f"Saving trained model to {save_path}...", file=sys.stderr)
+        print(f"Saving final trained model to {save_path}...", file=sys.stderr)
         try:
             self.model.save(save_path)
             print("Training completed successfully.", file=sys.stderr)
