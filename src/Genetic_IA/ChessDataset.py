@@ -21,17 +21,28 @@ class ChessUtils:
     def fen_to_array(fen: str) -> np.ndarray:
         board_str: str = fen.split(" ")[0]
         board_lines: List[str] = board_str.split("/")
-        board_values: List[float] = []
-
+        
+        piece_indices = {
+            'P': 0, 'N': 1, 'B': 2, 'R': 3, 'Q': 4, 'K': 5,
+            'p': 6, 'n': 7, 'b': 8, 'r': 9, 'q': 10, 'k': 11
+        }
+        flat_board = []
         for row in board_lines:
             for char in row:
                 if char.isdigit():
-                    board_values.extend([0.0] * int(char))
+                    flat_board.extend(['.'] * int(char))
                 else:
-                    board_values.append(PIECE_TO_VAL.get(char, 0.0))
-        if len(board_values) < 64:
-            board_values.extend([0.0] * (64 - len(board_values)))
-        return np.array(board_values[:64], dtype=np.float32)
+                    flat_board.append(char)s
+        if len(flat_board) < 64:
+             flat_board.extend(['.'] * (64 - len(flat_board)))
+        flat_board = flat_board[:64]
+        input_vector = np.zeros(64 * 12, dtype=np.float32)
+        for i, piece_char in enumerate(flat_board):
+            if piece_char in piece_indices:
+                piece_offset = piece_indices[piece_char]
+                idx = (i * 12) + piece_offset
+                input_vector[idx] = 1.0
+        return input_vector
 
 
 class ChessDataset:
