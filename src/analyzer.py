@@ -129,7 +129,6 @@ class ChessAnalyzer:
 
         if not inputs_list:
              raise ValueError("No valid labeled data found for training (Check label mapping vs Model output size).")
-
         X = np.array(inputs_list)
         Y = np.concatenate(targets_list, axis=0)
         
@@ -184,5 +183,25 @@ class ChessAnalyzer:
             raise IOError(f"Failed to save model to {save_path}: {e}")
 
     def _run_prediction(self) -> None:
-
-        print(f"Loading predictions for {self.args.chess_file}...", file=sys.stderr)
+        INVERSE_LABEL_MAP = {v: k for k, v in LABEL_MAP.items()}
+        
+        try:
+            raw_data = list(FENParser.parse_file(self.args.chess_file, is_train_mode=False))
+        except Exception as e:
+            raise ValueError(f"Error parsing prediction file: {e}")
+        if not raw_data:
+             print("Warning: No data found in file to predict.", file=sys.stderr)
+             return
+        inputs_list: List[np.ndarray] = []
+        for fen_grid, _ in raw_data:
+             inputs_list.append(fen_grid)   
+        X = np.array(inputs_list)
+        BATCH_SIZE = 1024
+        
+        for i in range(0, len(X), BATCH_SIZE):
+            batch_X = X[i : i + BATCH_SIZE]
+            output = self.model.feedforward(batch_X, training=False)
+            predicted_indices = np.argmax(output, axis=1)
+            for idx in predicted_indices:
+                label_str = INVERSE_LABEL_MAP.get(idx, "Unknown")
+                print(label_str)
