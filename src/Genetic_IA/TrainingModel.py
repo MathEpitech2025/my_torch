@@ -5,11 +5,14 @@ from tqdm import tqdm
 import os
 import sys
 
-from ChessDataset import ChessDataset
+from ChessDataset import ChessDataset, LABEL_MAP
 
 parent_folder_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_folder_src)
 from neural_network import NeuralNetwork, loss_functions, activation_functions, load_neuralnetwork, to_cpu_array
+
+MODEL_INPUT_SIZE = 64 * 12  # 64 cases * 12 types de pièces (one-hot)
+NUM_CLASSES = len(LABEL_MAP)
 
 
 @dataclass
@@ -39,10 +42,8 @@ def calculate_accuracy(model: NeuralNetwork, data: List[Tuple[np.ndarray, int]],
         batch_labels = xp.asarray([item[1] for item in data[start:end]], dtype=xp.int32)
 
         outputs = model.feedforward(batch_inputs, training=False)
-        outputs_cpu = to_cpu_array(outputs)
-        labels_cpu = to_cpu_array(batch_labels)
-        predicted = np.argmax(outputs_cpu, axis=1)
-        correct += int((predicted == labels_cpu).sum())
+        predicted = xp.argmax(outputs, axis=1)
+        correct += int(to_cpu_array((predicted == batch_labels).sum()))
 
     return 100 * correct / total
 
@@ -58,6 +59,14 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
         except Exception as e:
             print(f"GPU device query failed: {e}")
     dataset_size = len(dataset)
+    if dataset_size == 0:
+        raise ValueError("Dataset is vide.")
+
+    sample_input, _ = dataset[0]
+    feature_dim = len(sample_input)
+    if feature_dim != model.input_size:
+        raise ValueError(f"Incohérence des dimensions: dataset={feature_dim} features, model={model.input_size}. "
+                         f"Le modèle doit être initialisé avec {feature_dim} entrées.")
     val_size = int(dataset_size * config.validation_split)
     train_size = dataset_size - val_size
 
@@ -128,21 +137,32 @@ if __name__ == "__main__":
             lr_decay=0.99,
         )
 
-        if os.path.exists("Chess.pkl"):
-            print("Loading existing model...")
-            model = load_neuralnetwork("Chess.pkl", prefer_gpu=True)
-        else:
-            model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"], prefer_gpu=True)
+        def build_fresh_model():
+            net = NeuralNetwork(MODEL_INPUT_SIZE, loss_function=loss_functions["cross_entropy"], prefer_gpu=True)
             for i, layer in enumerate(config.hidden_layers):
                 dropout = config.dropout_rate if i < len(config.hidden_layers) - 1 else 0.0
-                model.add_layer(
+                net.add_layer(
                     layer,
                     activation=activation_functions["leaky_relu"],
                     dropout_rate=dropout,
                     weight_decay=config.weight_decay,
                     optimizer=config.optimizer,
                 )
-            model.add_layer(3, activation=activation_functions["softmax"], optimizer=config.optimizer)
+            net.add_layer(NUM_CLASSES, activation=activation_functions["softmax"], optimizer=config.optimizer)
+            return net
+
+        if os.path.exists("Chess.pkl"):
+            try:
+                print("Loading existing model...")
+                model = load_neuralnetwork("Chess.pkl", prefer_gpu=True)
+                if model.input_size != MODEL_INPUT_SIZE or model.output_size != NUM_CLASSES:
+                    print("Ancien modèle incompatible (dimensions). Reconstruction d'un nouveau modèle.")
+                    model = build_fresh_model()
+            except Exception as e:
+                print(f"Impossible de charger l'ancien modèle ({e}), reconstruction.")
+                model = build_fresh_model()
+        else:
+            model = build_fresh_model()
 
         for _ in range(100):
             print("Training...")
