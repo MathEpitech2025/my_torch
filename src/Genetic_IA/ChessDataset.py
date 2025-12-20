@@ -51,11 +51,27 @@ class ChessDataset:
 
         if not os.path.exists(root_dir):
             raise FileNotFoundError(f"Folder {root_dir} does,t exist.")
+
+        # Allow direct single-file datasets
+        if os.path.isfile(root_dir):
+            self._load_file(root_dir)
+            print(f"Loading single-file dataset: {len(self.samples)} samples from {root_dir}.")
+            return
+
+        combined_file = os.path.join(root_dir, "combined_dataset.txt")
+
+        if os.path.exists(combined_file):
+            self._load_file(combined_file)
+            print(f"Loading combined dataset: {len(self.samples)} samples from {combined_file}.")
+            return
+
         search_path = os.path.join(root_dir, "**", "*.txt")
         all_files = glob.glob(search_path, recursive=True)
         if not all_files:
             raise FileNotFoundError(f"No file found {root_dir}")
         for file_path in all_files:
+            if os.path.abspath(file_path) == os.path.abspath(combined_file):
+                continue
             self._load_file(file_path)
 
         print(f"Loading completed : {len(self.samples)} exemple found.")
@@ -100,4 +116,3 @@ class ChessDataset:
         except Exception as e:
             print(f"Error converting FEN: {fen} -> {e}")
             return np.zeros(64, dtype=np.float32), 0
-
