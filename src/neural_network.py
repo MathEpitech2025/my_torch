@@ -90,7 +90,7 @@ def leaky_relu_derivative(xp, x):
     return xp.where(x > 0, 1, 0.01)
 
 def gelu(xp, x):
-    return 0.5 * x * (1 + xp.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * xp.power(x, 3))))
+    return 0.5 * x * (1 + xp.tanh(xp.sqrt(2.0 / xp.pi) * (x + 0.044715 * xp.power(x, 3))))
 
 def gelu_derivative(xp, x):
     return 0.5 * (1 + xp.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * xp.power(x, 3))))
@@ -287,12 +287,18 @@ class NeuralNetwork:
         if target_xp is self.xp:
             return
         for layer in self.layers:
-            if target_xp is np:
-                layer.weights = to_cpu_array(layer.weights)
-                layer.biases = to_cpu_array(layer.biases)
-            else:
-                layer.weights = target_xp.asarray(layer.weights)
-                layer.biases = target_xp.asarray(layer.biases)
+            def _convert(arr):
+                if target_xp is np:
+                    return to_cpu_array(arr)
+                return target_xp.asarray(arr)
+
+            layer.weights = _convert(layer.weights)
+            layer.biases = _convert(layer.biases)
+            if hasattr(layer, "m_weights"):
+                layer.m_weights = _convert(layer.m_weights)
+                layer.v_weights = _convert(layer.v_weights)
+                layer.m_biases = _convert(layer.m_biases)
+                layer.v_biases = _convert(layer.v_biases)
             layer.xp = target_xp
         self.xp = target_xp
 
@@ -307,9 +313,26 @@ class NeuralNetwork:
         original = []
         if self.xp is not np:
             for layer in self.layers:
-                original.append((layer, layer.weights, layer.biases))
+                layer_state = {
+                    "layer": layer,
+                    "weights": layer.weights,
+                    "biases": layer.biases,
+                }
+                if hasattr(layer, "m_weights"):
+                    layer_state.update({
+                        "m_weights": layer.m_weights,
+                        "v_weights": layer.v_weights,
+                        "m_biases": layer.m_biases,
+                        "v_biases": layer.v_biases,
+                    })
+                original.append(layer_state)
                 layer.weights = to_cpu_array(layer.weights)
                 layer.biases = to_cpu_array(layer.biases)
+                if hasattr(layer, "m_weights"):
+                    layer.m_weights = to_cpu_array(layer.m_weights)
+                    layer.v_weights = to_cpu_array(layer.v_weights)
+                    layer.m_biases = to_cpu_array(layer.m_biases)
+                    layer.v_biases = to_cpu_array(layer.v_biases)
                 layer.xp = np
             self_xp = self.xp
             self.xp = np
@@ -321,7 +344,13 @@ class NeuralNetwork:
         finally:
             if self_xp is not None:
                 self.xp = self_xp
-                for layer, w, b in original:
-                    layer.weights = w
-                    layer.biases = b
+                for layer_state in original:
+                    layer = layer_state["layer"]
+                    layer.weights = layer_state["weights"]
+                    layer.biases = layer_state["biases"]
+                    if "m_weights" in layer_state:
+                        layer.m_weights = layer_state["m_weights"]
+                        layer.v_weights = layer_state["v_weights"]
+                        layer.m_biases = layer_state["m_biases"]
+                        layer.v_biases = layer_state["v_biases"]
                     layer.xp = self.xp
