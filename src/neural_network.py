@@ -310,22 +310,27 @@ class NeuralNetwork:
         return self.xp is not np
 
     def save(self, filename):
-        original = []
-        if self.xp is not np:
-            for layer in self.layers:
-                layer_state = {
-                    "layer": layer,
-                    "weights": layer.weights,
-                    "biases": layer.biases,
-                }
-                if hasattr(layer, "m_weights"):
-                    layer_state.update({
-                        "m_weights": layer.m_weights,
-                        "v_weights": layer.v_weights,
-                        "m_biases": layer.m_biases,
-                        "v_biases": layer.v_biases,
-                    })
-                original.append(layer_state)
+        # Neutralise xp modules for pickling; keep copies to restore after save
+        original_xp = self.xp
+        saved_states = []
+
+        for layer in self.layers:
+            state = {
+                "layer": layer,
+                "weights": layer.weights,
+                "biases": layer.biases,
+                "xp": layer.xp,
+            }
+            if hasattr(layer, "m_weights"):
+                state.update({
+                    "m_weights": layer.m_weights,
+                    "v_weights": layer.v_weights,
+                    "m_biases": layer.m_biases,
+                    "v_biases": layer.v_biases,
+                })
+            saved_states.append(state)
+
+            if layer.xp is not np:
                 layer.weights = to_cpu_array(layer.weights)
                 layer.biases = to_cpu_array(layer.biases)
                 if hasattr(layer, "m_weights"):
@@ -333,24 +338,22 @@ class NeuralNetwork:
                     layer.v_weights = to_cpu_array(layer.v_weights)
                     layer.m_biases = to_cpu_array(layer.m_biases)
                     layer.v_biases = to_cpu_array(layer.v_biases)
-                layer.xp = np
-            self_xp = self.xp
-            self.xp = np
-        else:
-            self_xp = None
+            layer.xp = None
+
+        self.xp = None
+
         try:
             with open(filename, 'wb') as f:
                 pickle.dump(self, f)
         finally:
-            if self_xp is not None:
-                self.xp = self_xp
-                for layer_state in original:
-                    layer = layer_state["layer"]
-                    layer.weights = layer_state["weights"]
-                    layer.biases = layer_state["biases"]
-                    if "m_weights" in layer_state:
-                        layer.m_weights = layer_state["m_weights"]
-                        layer.v_weights = layer_state["v_weights"]
-                        layer.m_biases = layer_state["m_biases"]
-                        layer.v_biases = layer_state["v_biases"]
-                    layer.xp = self.xp
+            self.xp = original_xp
+            for state in saved_states:
+                layer = state["layer"]
+                layer.weights = state["weights"]
+                layer.biases = state["biases"]
+                if "m_weights" in state:
+                    layer.m_weights = state["m_weights"]
+                    layer.v_weights = state["v_weights"]
+                    layer.m_biases = state["m_biases"]
+                    layer.v_biases = state["v_biases"]
+                layer.xp = state["xp"]
