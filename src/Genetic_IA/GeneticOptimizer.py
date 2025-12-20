@@ -7,13 +7,15 @@ import time
 from dataclasses import dataclass, field, asdict
 from typing import List, Tuple, Optional
 from TrainingModel import TrainingConfig, train_network
-from ChessDataset import ChessDataset
+from ChessDataset import ChessDataset, LABEL_MAP
 import numpy as np
 
 parent_folder_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_folder_src)
 from neural_network import NeuralNetwork, loss_functions, activation_functions
 
+MODEL_INPUT_SIZE = 64 * 12
+NUM_CLASSES = len(LABEL_MAP)
 
 @dataclass
 class Genome:
@@ -106,6 +108,15 @@ class GeneticOptimizer:
         print(f"Genesis: Creating initial population of {pop_size} individuals...")
         return [self.generate_random_genome() for _ in range(pop_size)]
 
+    def _sync_if_gpu(self, model: NeuralNetwork):
+        if getattr(model, "uses_gpu", False):
+            xp = getattr(model, "xp", None)
+            try:
+                if xp is not None and hasattr(xp, "cuda"):
+                    xp.cuda.Stream.null.synchronize()
+            except Exception:
+                pass
+
     def evaluate_population(self, population: List[Genome], dataset: ChessDataset):
         print(f"\nStarting Evaluation of {len(population)} individuals...")
         
@@ -114,21 +125,23 @@ class GeneticOptimizer:
                 print(f"Individual {i+1} already evaluated (Fitness: {genome.fitness:.2f}% | Time: {genome.eval_time:.2f}s)")
                 continue
             print(f"\nTesting Individual {i+1}/{len(population)}: {genome.hidden_layers} | {genome.activation_fns} | LR: {genome.learning_rate:.5f} | Opt: {genome.optimizer}")
-            model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"], prefer_gpu=True)
+            model = NeuralNetwork(MODEL_INPUT_SIZE, loss_function=loss_functions["cross_entropy"], prefer_gpu=True)
 
             for layer_size, act_name in zip(genome.hidden_layers, genome.activation_fns):
                 model.add_layer(layer_size, activation=activation_functions[act_name], dropout_rate=genome.dropouts, optimizer=genome.optimizer)
 
-            model.add_layer(3, activation=activation_functions["softmax"], optimizer=genome.optimizer)
+            model.add_layer(NUM_CLASSES, activation=activation_functions["softmax"], optimizer=genome.optimizer)
             config = genome.to_config()
             start_time = time.perf_counter()
             try:
                 accuracy, _ = train_network(model, dataset, config)
+                self._sync_if_gpu(model)
                 duration = time.perf_counter() - start_time
-                genome.fitness = accuracy
+                genome.fitness = round(accuracy, 0)
                 genome.eval_time = duration
                 print(f"--> Score: {accuracy:.2f}% | Time: {duration:.2f}s")
             except Exception as e:
+                self._sync_if_gpu(model)
                 print(f"--> Death by Error: {e}")
                 genome.fitness = 0.0
                 genome.eval_time = time.perf_counter() - start_time
@@ -238,7 +251,10 @@ class GeneticOptimizer:
                 state = json.load(f)
             population = [Genome.from_dict(g) for g in state["population"]]
             generation = state["generation"]
-            print(f"--> Resuming from Generation {generation}")
+            for g in population:
+                g.fitness = 0.0
+                g.eval_time = 0.0
+            print(f"--> Resuming from Generation {generation} (fitness remis à 0 pour réévaluation avec le nouveau format d'entrée)")
             return population, generation
         except Exception as e:
             print(f"Error loading save file: {e}. Starting fresh.")
