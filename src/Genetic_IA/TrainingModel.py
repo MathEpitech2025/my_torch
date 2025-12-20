@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 from tqdm import tqdm
 import os
 import sys
+import time
 
 from ChessDataset import ChessDataset, LABEL_MAP
 
@@ -82,6 +83,7 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
 
     current_lr = config.learning_rate
     for epoch in range(config.epochs):
+        epoch_start = time.perf_counter()
         total_loss = 0.0
         np.random.shuffle(train_data)
 
@@ -111,7 +113,8 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
         avg_loss = total_loss / num_batches
         val_accuracy = calculate_accuracy(model, val_data, batch_size=val_batch_size)
 
-        print(f"Epoch {epoch + 1}/{config.epochs} - Loss: {avg_loss:.4f} - Validation Accuracy: {val_accuracy:.2f}% - LR: {current_lr:.6f}")
+        epoch_duration = time.perf_counter() - epoch_start
+        print(f"Epoch {epoch + 1}/{config.epochs} - Loss: {avg_loss:.4f} - Validation Accuracy: {val_accuracy:.2f}% - LR: {current_lr:.6f} - Duration: {epoch_duration:.2f}s")
         current_lr *= config.lr_decay
 
     print("Training completed !")
@@ -122,7 +125,9 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
 if __name__ == "__main__":
     try:
         print("Loading dataset...")
-        dataset = ChessDataset("dataset")
+        dataset_path = "full_training_set.txt" if os.path.exists("full_training_set.txt") else "dataset"
+        print(f"Dataset path: {dataset_path}")
+        dataset = ChessDataset(dataset_path)
 
         config = TrainingConfig(
             learning_rate=0.001,
@@ -166,8 +171,10 @@ if __name__ == "__main__":
 
         for _ in range(100):
             print("Training...")
+            t0 = time.perf_counter()
             accuracy, config.learning_rate = train_network(model, dataset, config)
-            print(f"Accuracy: {accuracy:.2f}% | LR: {config.learning_rate:.6f}")
+            elapsed = time.perf_counter() - t0
+            print(f"Accuracy: {accuracy:.2f}% | LR: {config.learning_rate:.6f} | Duration: {elapsed:.2f}s")
             model.save("Chess.pkl")
     except Exception as e:
         print(f"Error during test: {e}")
