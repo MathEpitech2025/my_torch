@@ -11,8 +11,8 @@ LABEL_MAP: Dict[str, int] = {
 }
 
 PIECE_TO_VAL: Dict[str, float] = {
-    'P': 1.0, 'N': 3.0, 'B': 3.0, 'R': 5.0, 'Q': 9.0, 'K': 10.0,
-    'p': -1.0, 'n': -3.0, 'b': -3.0, 'r': -5.0, 'q': -9.0, 'k': -10.0,
+    'P': 0.1, 'N': 0.3, 'B': 0.3, 'R': 0.5, 'Q': 0.9, 'K': 1.0,
+    'p': -0.1, 'n': -0.3, 'b': -0.3, 'r': -0.5, 'q': -0.9, 'k': -1.0,
     '.': 0.0
 }
 
@@ -21,17 +21,28 @@ class ChessUtils:
     def fen_to_array(fen: str) -> np.ndarray:
         board_str: str = fen.split(" ")[0]
         board_lines: List[str] = board_str.split("/")
-        board_values: List[float] = []
-
+        
+        piece_indices = {
+            'P': 0, 'N': 1, 'B': 2, 'R': 3, 'Q': 4, 'K': 5,
+            'p': 6, 'n': 7, 'b': 8, 'r': 9, 'q': 10, 'k': 11
+        }
+        flat_board = []
         for row in board_lines:
             for char in row:
                 if char.isdigit():
-                    board_values.extend([0.0] * int(char))
+                    flat_board.extend(['.'] * int(char))
                 else:
-                    board_values.append(PIECE_TO_VAL.get(char, 0.0))
-        if len(board_values) < 64:
-            board_values.extend([0.0] * (64 - len(board_values)))
-        return np.array(board_values[:64], dtype=np.float32)
+                    flat_board.append(char)
+        if len(flat_board) < 64:
+             flat_board.extend(['.'] * (64 - len(flat_board)))
+        flat_board = flat_board[:64]
+        input_vector = np.zeros(64 * 12, dtype=np.float32)
+        for i, piece_char in enumerate(flat_board):
+            if piece_char in piece_indices:
+                piece_offset = piece_indices[piece_char]
+                idx = (i * 12) + piece_offset
+                input_vector[idx] = 1.0
+        return input_vector
 
 
 class ChessDataset:
