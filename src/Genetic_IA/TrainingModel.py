@@ -11,7 +11,7 @@ parent_folder_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_folder_src)
 from neural_network import NeuralNetwork, loss_functions, activation_functions, load_neuralnetwork, to_cpu_array
 
-MODEL_INPUT_SIZE = 64 * 12  # 64 cases * 12 types de pièces (one-hot)
+MODEL_INPUT_SIZE = 64 * 12
 NUM_CLASSES = len(LABEL_MAP)
 
 
