@@ -52,7 +52,6 @@ class ChessDataset:
         if not os.path.exists(root_dir):
             raise FileNotFoundError(f"Folder {root_dir} does,t exist.")
 
-        # Allow direct single-file datasets
         if os.path.isfile(root_dir):
             self._load_file(root_dir)
             print(f"Loading single-file dataset: {len(self.samples)} samples from {root_dir}.")

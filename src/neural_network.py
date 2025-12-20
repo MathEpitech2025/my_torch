@@ -310,7 +310,6 @@ class NeuralNetwork:
         return self.xp is not np
 
     def save(self, filename):
-        # Neutralise xp modules for pickling; keep copies to restore after save
         original_xp = self.xp
         saved_states = []
 
