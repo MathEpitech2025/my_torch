@@ -10,6 +10,7 @@ build/
 venv/
 env/
 ENV/
+.venv/
 
 .vscode/
 .idea/
@@ -32,6 +33,9 @@ temp/
 __pycache__/
 .pytest_cache/
 .cache/
+
+# Large local data
+full_training_set.txt
 
 models/*
 !models/my_torch_network_*.nn
