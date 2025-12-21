@@ -1,0 +1,193 @@
+{
+    "generation": 2468,
+    "population": [
+        {
+            "learning_rate": 0.00031884503464284496,
+            "batch_size": 64,
+            "hidden_layers": [
+                256,
+                256,
+                256
+            ],
+            "activation_fns": [
+                "gelu",
+                "leaky_relu",
+                "tanh"
+            ],
+            "fitness": 66.56915831621751,
+            "eval_time": 152.6796573569991,
+            "dropouts": 0.0,
+            "optimizer": "adam",
+            "gradient_clip": 1.0,
+            "lr_decay": 1.0
+        },
+        {
+            "learning_rate": 0.00031884503464284496,
+            "batch_size": 64,
+            "hidden_layers": [
+                256,
+                256,
+                256
+            ],
+            "activation_fns": [
+                "gelu",
+                "leaky_relu",
+                "tanh"
+            ],
+            "fitness": 66.68948776996328,
+            "eval_time": 177.30914415799998,
+            "dropouts": 0.0,
+            "optimizer": "adam",
+            "gradient_clip": 1.0,
+            "lr_decay": 1.0
+        },
+        {
+            "learning_rate": 0.00031884503464284496,
+            "batch_size": 64,
+            "hidden_layers": [
+                256,
+                256
+            ],
+            "activation_fns": [
+                "gelu",
+                "leaky_relu"
+            ],
+            "fitness": 0.0,
+            "eval_time": 0.0,
+            "dropouts": 0.19083421920378166,
+            "optimizer": "adam",
+            "gradient_clip": 1.0,
+            "lr_decay": 0.9732059810764829
+        },
+        {
+            "learning_rate": 0.00031884503464284496,
+            "batch_size": 64,
+            "hidden_layers": [
+                256,
+                256
+            ],
+            "activation_fns": [
+                "gelu",
+                "leaky_relu"
+            ],
+            "fitness": 0.0,
+            "eval_time": 0.0,
+            "dropouts": 0.0,
+            "optimizer": "adam",
+            "gradient_clip": 1.0,
+            "lr_decay": 1.0
+        },
+        {
+            "learning_rate": 0.00031884503464284496,
+            "batch_size": 64,
+            "hidden_layers": [
+                256,
+                256
+            ],
+            "activation_fns": [
+                "gelu",
+                "leaky_relu"
+            ],
+            "fitness": 0.0,
+            "eval_time": 0.0,
+            "dropouts": 0.0,
+            "optimizer": "adam",
+            "gradient_clip": 1.0,
+            "lr_decay": 1.0
+        },
+        {
+            "learning_rate": 0.00031884503464284496,
+            "batch_size": 64,
+            "hidden_layers": [
+                256,
+                256
+            ],
+            "activation_fns": [
+                "gelu",
+                "leaky_relu"
+            ],
+            "fitness": 0.0,
+            "eval_time": 0.0,
+            "dropouts": 0.0,
+            "optimizer": "adam",
+            "gradient_clip": 1.0,
+            "lr_decay": 0.9914671500381038
+        },
+        {
+            "learning_rate": 0.00031884503464284496,
+            "batch_size": 64,
+            "hidden_layers": [
+                256,
+                256
+            ],
+            "activation_fns": [
+                "gelu",
+                "relu"
+            ],
+            "fitness": 0.0,
+            "eval_time": 0.0,
+            "dropouts": 0.0,
+            "optimizer": "adam",
+            "gradient_clip": 1.0,
+            "lr_decay": 0.9914671500381038
+        },
+        {
+            "learning_rate": 0.00027741702411805176,
+            "batch_size": 64,
+            "hidden_layers": [
+                256,
+                256,
+                256
+            ],
+            "activation_fns": [
+                "gelu",
+                "leaky_relu",
+                "gelu"
+            ],
+            "fitness": 0.0,
+            "eval_time": 0.0,
+            "dropouts": 0.0,
+            "optimizer": "adam",
+            "gradient_clip": 1.0,
+            "lr_decay": 0.9789768727294117
+        },
+        {
+            "learning_rate": 0.00031884503464284496,
+            "batch_size": 64,
+            "hidden_layers": [
+                128,
+                256,
+                256
+            ],
+            "activation_fns": [
+                "gelu",
+                "leaky_relu",
+                "tanh"
+            ],
+            "fitness": 0.0,
+            "eval_time": 0.0,
+            "dropouts": 0.1493940409463228,
+            "optimizer": "adam",
+            "gradient_clip": 5.0,
+            "lr_decay": 1.0
+        },
+        {
+            "learning_rate": 0.00031884503464284496,
+            "batch_size": 64,
+            "hidden_layers": [
+                256,
+                256
+            ],
+            "activation_fns": [
+                "gelu",
+                "leaky_relu"
+            ],
+            "fitness": 0.0,
+            "eval_time": 0.0,
+            "dropouts": 0.0,
+            "optimizer": "adam",
+            "gradient_clip": 1.0,
+            "lr_decay": 1.0
+        }
+    ]
+}
