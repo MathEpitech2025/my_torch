@@ -50,7 +50,7 @@ class ChessDataset:
         self.samples: List[Tuple[str, int]] = []
 
         if not os.path.exists(root_dir):
-            raise FileNotFoundError(f"Folder {root_dir} does,t exist.")
+            raise FileNotFoundError(f"Folder {root_dir} does not exist.")
 
         if os.path.isfile(root_dir):
             self._load_file(root_dir)
@@ -73,7 +73,7 @@ class ChessDataset:
                 continue
             self._load_file(file_path)
 
-        print(f"Loading completed : {len(self.samples)} exemple found.")
+        print(f"Loading completed: {len(self.samples)} samples found.")
 
     def _load_file(self, file_path: str):
         try:
