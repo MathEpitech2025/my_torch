@@ -19,7 +19,7 @@ python3 src/Genetic_IA/GeneticOptimizer.py
 ## Evaluation & timing
 - Each individual: short train via `train_network` (epochs=3 by default in `Genome.to_config`).
 - Accuracy: rounded to % for ranking.
-- Time: GPU synchronized before timing to measure training duration correctly.
+- Time: wall-clock measurement of each short training run.
 - Sorting: by rounded fitness, then time (faster wins ties).
 
 ## Key parameters (in `GeneticOptimizer`)
@@ -28,7 +28,7 @@ python3 src/Genetic_IA/GeneticOptimizer.py
 - `epochs` per individual: adjust in `Genome.to_config` (heavily impacts generation time).
 
 ## Best practices
-- GPU: raise `batch_size` if VRAM allows to speed evaluation.
+- Raise `batch_size` if RAM allows to speed evaluation.
 - Large dataset: plan time per generation (~723k samples).
 - Incompatible checkpoints: delete/recreate if target architecture changes (stays 768→4 here).
 
