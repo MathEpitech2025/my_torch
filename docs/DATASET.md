@@ -13,26 +13,8 @@
 - Loaded first by `ChessDataset`. If missing, falls back to individual files.
 
 ## Regenerate combined file (optional)
-```python
-python3 - <<'PY'
-import glob, os
-root='dataset'
-combined=os.path.join(root,'combined_dataset.txt')
-seen=set(); count=0
-with open(combined,'w') as out:
-    for path in glob.glob(os.path.join(root,'**','*.txt'), recursive=True):
-        if os.path.abspath(path)==os.path.abspath(combined):
-            continue
-        with open(path) as f:
-            for line in f:
-                line=line.strip()
-                if not line or line in seen:
-                    continue
-                seen.add(line)
-                out.write(line+'\\n'); count+=1
-print(f\"Wrote {count} unique samples to {combined}\")
-PY
-```
+- Merge all `.txt` files under `dataset/` into `dataset/combined_dataset.txt`, skipping duplicate lines and excluding the combined file itself.
+- Ensure the resulting file keeps one sample per line and matches the 768→4 target format.
 
 ## Compatibility
 - Target model: 768 inputs, 4 outputs. A combined file or checkpoint with old dimensions will mismatch.
