@@ -61,13 +61,13 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
             print(f"GPU device query failed: {e}")
     dataset_size = len(dataset)
     if dataset_size == 0:
-        raise ValueError("Dataset is vide.")
+        raise ValueError("Dataset is empty.")
 
     sample_input, _ = dataset[0]
     feature_dim = len(sample_input)
     if feature_dim != model.input_size:
-        raise ValueError(f"Incohérence des dimensions: dataset={feature_dim} features, model={model.input_size}. "
-                         f"Le modèle doit être initialisé avec {feature_dim} entrées.")
+        raise ValueError(f"Dimension mismatch: dataset={feature_dim} features, model={model.input_size}. "
+                         f"The model must be initialized with {feature_dim} inputs.")
     val_size = int(dataset_size * config.validation_split)
     train_size = dataset_size - val_size
 
@@ -117,7 +117,7 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
         print(f"Epoch {epoch + 1}/{config.epochs} - Loss: {avg_loss:.4f} - Validation Accuracy: {val_accuracy:.2f}% - LR: {current_lr:.6f} - Duration: {epoch_duration:.2f}s")
         current_lr *= config.lr_decay
 
-    print("Training completed !")
+    print("Training completed!")
     final_score = calculate_accuracy(model, val_data, batch_size=val_batch_size)
     return final_score, current_lr
 
@@ -161,10 +161,10 @@ if __name__ == "__main__":
                 print("Loading existing model...")
                 model = load_neuralnetwork("Chess.pkl", prefer_gpu=True)
                 if model.input_size != MODEL_INPUT_SIZE or model.output_size != NUM_CLASSES:
-                    print("Ancien modèle incompatible (dimensions). Reconstruction d'un nouveau modèle.")
+                    print("Existing model incompatible (dimensions). Rebuilding a new model.")
                     model = build_fresh_model()
             except Exception as e:
-                print(f"Impossible de charger l'ancien modèle ({e}), reconstruction.")
+                print(f"Failed to load existing model ({e}), rebuilding.")
                 model = build_fresh_model()
         else:
             model = build_fresh_model()

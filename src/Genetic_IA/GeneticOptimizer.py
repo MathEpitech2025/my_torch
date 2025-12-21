@@ -254,7 +254,7 @@ class GeneticOptimizer:
             for g in population:
                 g.fitness = 0.0
                 g.eval_time = 0.0
-            print(f"--> Resuming from Generation {generation} (fitness remis à 0 pour réévaluation avec le nouveau format d'entrée)")
+            print(f"--> Resuming from Generation {generation} (fitness reset to 0 for reevaluation with the new input format)")
             return population, generation
         except Exception as e:
             print(f"Error loading save file: {e}. Starting fresh.")
