@@ -4,12 +4,16 @@ from typing import List, Optional, Tuple
 from tqdm import tqdm
 import os
 import sys
+import time
 
-from ChessDataset import ChessDataset
+from ChessDataset import ChessDataset, LABEL_MAP
 
 parent_folder_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_folder_src)
-from neural_network import NeuralNetwork, loss_functions, activation_functions, load_neuralnetwork
+from neural_network import NeuralNetwork, loss_functions, activation_functions, load_neuralnetwork, to_cpu_array
+
+MODEL_INPUT_SIZE = 64 * 12
+NUM_CLASSES = len(LABEL_MAP)
 
 
 @dataclass
@@ -25,20 +29,45 @@ class TrainingConfig:
     gradient_clip: Optional[float] = None
     lr_decay: float = 1.0
 
-def calculate_accuracy(model: NeuralNetwork, data: List[Tuple[np.ndarray, int]]) -> float:
+def calculate_accuracy(model: NeuralNetwork, data: List[Tuple[np.ndarray, int]], batch_size: int = 2048) -> float:
+    xp = getattr(model, "xp", np)
     correct = 0
     total = len(data)
 
-    for inputs, label in data:
-        inputs = inputs.reshape(1, -1)
-        output = model.feedforward(inputs, training=False)
-        predicted = np.argmax(output, axis=1)[0]
-        correct += int(predicted == label)
+    if total == 0:
+        return 0.0
 
-    return (100 * correct / total) if total > 0 else 0.0
+    for start in range(0, total, batch_size):
+        end = min(start + batch_size, total)
+        batch_inputs = xp.asarray([item[0] for item in data[start:end]], dtype=xp.float32)
+        batch_labels = xp.asarray([item[1] for item in data[start:end]], dtype=xp.int32)
+
+        outputs = model.feedforward(batch_inputs, training=False)
+        predicted = xp.argmax(outputs, axis=1)
+        correct += int(to_cpu_array((predicted == batch_labels).sum()))
+
+    return 100 * correct / total
 
 def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingConfig) -> Tuple[float, float]:
+    xp = getattr(model, "xp", np)
+    print(f"Backend: {'GPU' if getattr(model, 'uses_gpu', False) else 'CPU'} (xp={xp.__name__})")
+    if getattr(model, "uses_gpu", False):
+        try:
+            import cupy as cp
+            dev_id = cp.cuda.runtime.getDevice()
+            props = cp.cuda.runtime.getDeviceProperties(dev_id)
+            print(f"GPU device: {props['name'].decode()} (id={dev_id})")
+        except Exception as e:
+            print(f"GPU device query failed: {e}")
     dataset_size = len(dataset)
+    if dataset_size == 0:
+        raise ValueError("Dataset is empty.")
+
+    sample_input, _ = dataset[0]
+    feature_dim = len(sample_input)
+    if feature_dim != model.input_size:
+        raise ValueError(f"Dimension mismatch: dataset={feature_dim} features, model={model.input_size}. "
+                         f"The model must be initialized with {feature_dim} inputs.")
     val_size = int(dataset_size * config.validation_split)
     train_size = dataset_size - val_size
 
@@ -50,9 +79,11 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
     val_data = [dataset[i] for i in val_indices]
 
     print(f"Data split: {train_size} training samples | {val_size} validation samples")
+    val_batch_size = max(256, min(config.batch_size, 4096))
 
     current_lr = config.learning_rate
     for epoch in range(config.epochs):
+        epoch_start = time.perf_counter()
         total_loss = 0.0
         np.random.shuffle(train_data)
 
@@ -64,35 +95,39 @@ def train_network(model: NeuralNetwork, dataset: ChessDataset, config: TrainingC
             end_idx = min(start_idx + config.batch_size, len(train_data))
             batch = train_data[start_idx:end_idx]
 
-            batch_inputs = np.array([item[0] for item in batch])
-            batch_labels = np.array([item[1] for item in batch])
+            batch_inputs = xp.asarray([item[0] for item in batch], dtype=xp.float32)
+            batch_labels = xp.asarray([item[1] for item in batch], dtype=xp.int32)
 
             num_classes = model.output_size
-            batch_targets = np.zeros((len(batch_labels), num_classes))
-            batch_targets[np.arange(len(batch_labels)), batch_labels] = 1
+            batch_targets = xp.zeros((len(batch_labels), num_classes), dtype=xp.float32)
+            batch_targets[xp.arange(len(batch_labels)), batch_labels] = 1
 
             outputs = model.feedforward(batch_inputs, training=True)
-            loss = model.loss_function(outputs, batch_targets)
+            loss = model.loss_function(xp, outputs, batch_targets)
             model.backpropagation(batch_targets, current_lr, config.gradient_clip)
 
-            total_loss += loss
-            progress_bar.set_postfix(loss=loss, lr=current_lr)
+            loss_value = float(to_cpu_array(loss))
+            total_loss += loss_value
+            progress_bar.set_postfix(loss=loss_value, lr=current_lr)
 
         avg_loss = total_loss / num_batches
-        val_accuracy = calculate_accuracy(model, val_data)
+        val_accuracy = calculate_accuracy(model, val_data, batch_size=val_batch_size)
 
-        print(f"Epoch {epoch + 1}/{config.epochs} - Loss: {avg_loss:.4f} - Validation Accuracy: {val_accuracy:.2f}% - LR: {current_lr:.6f}")
+        epoch_duration = time.perf_counter() - epoch_start
+        print(f"Epoch {epoch + 1}/{config.epochs} - Loss: {avg_loss:.4f} - Validation Accuracy: {val_accuracy:.2f}% - LR: {current_lr:.6f} - Duration: {epoch_duration:.2f}s")
         current_lr *= config.lr_decay
 
-    print("Training completed !")
-    final_score = calculate_accuracy(model, val_data)
+    print("Training completed!")
+    final_score = calculate_accuracy(model, val_data, batch_size=val_batch_size)
     return final_score, current_lr
 
 
 if __name__ == "__main__":
     try:
         print("Loading dataset...")
-        dataset = ChessDataset("dataset")
+        dataset_path = "full_training_set.txt" if os.path.exists("full_training_set.txt") else "dataset"
+        print(f"Dataset path: {dataset_path}")
+        dataset = ChessDataset(dataset_path)
 
         config = TrainingConfig(
             learning_rate=0.001,
@@ -107,26 +142,39 @@ if __name__ == "__main__":
             lr_decay=0.99,
         )
 
-        if os.path.exists("Chess.pkl"):
-            print("Loading existing model...")
-            model = load_neuralnetwork("Chess.pkl")
-        else:
-            model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"])
+        def build_fresh_model():
+            net = NeuralNetwork(MODEL_INPUT_SIZE, loss_function=loss_functions["cross_entropy"], prefer_gpu=True)
             for i, layer in enumerate(config.hidden_layers):
                 dropout = config.dropout_rate if i < len(config.hidden_layers) - 1 else 0.0
-                model.add_layer(
+                net.add_layer(
                     layer,
                     activation=activation_functions["leaky_relu"],
                     dropout_rate=dropout,
                     weight_decay=config.weight_decay,
                     optimizer=config.optimizer,
                 )
-            model.add_layer(3, activation=activation_functions["softmax"], optimizer=config.optimizer)
+            net.add_layer(NUM_CLASSES, activation=activation_functions["softmax"], optimizer=config.optimizer)
+            return net
+
+        if os.path.exists("Chess.pkl"):
+            try:
+                print("Loading existing model...")
+                model = load_neuralnetwork("Chess.pkl", prefer_gpu=True)
+                if model.input_size != MODEL_INPUT_SIZE or model.output_size != NUM_CLASSES:
+                    print("Existing model incompatible (dimensions). Rebuilding a new model.")
+                    model = build_fresh_model()
+            except Exception as e:
+                print(f"Failed to load existing model ({e}), rebuilding.")
+                model = build_fresh_model()
+        else:
+            model = build_fresh_model()
 
         for _ in range(100):
             print("Training...")
+            t0 = time.perf_counter()
             accuracy, config.learning_rate = train_network(model, dataset, config)
-            print(f"Accuracy: {accuracy:.2f}% | LR: {config.learning_rate:.6f}")
+            elapsed = time.perf_counter() - t0
+            print(f"Accuracy: {accuracy:.2f}% | LR: {config.learning_rate:.6f} | Duration: {elapsed:.2f}s")
             model.save("Chess.pkl")
     except Exception as e:
         print(f"Error during test: {e}")

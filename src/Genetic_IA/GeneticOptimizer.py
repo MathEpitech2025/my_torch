@@ -3,16 +3,19 @@ import copy
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass, field, asdict
 from typing import List, Tuple, Optional
 from TrainingModel import TrainingConfig, train_network
-from ChessDataset import ChessDataset
+from ChessDataset import ChessDataset, LABEL_MAP
 import numpy as np
 
 parent_folder_src = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_folder_src)
 from neural_network import NeuralNetwork, loss_functions, activation_functions
 
+MODEL_INPUT_SIZE = 64 * 12
+NUM_CLASSES = len(LABEL_MAP)
 
 @dataclass
 class Genome:
@@ -21,6 +24,7 @@ class Genome:
     hidden_layers: List[int]
     activation_fns: List[str] = field(default_factory=lambda: ["relu"])
     fitness: float = 0.0
+    eval_time: float = 0.0
     dropouts: float = None
     optimizer: str = "sgd"
     gradient_clip: float = None
@@ -61,6 +65,7 @@ class Genome:
             hidden_layers=hidden_layers,
             activation_fns=activation_fns,
             fitness=data.get("fitness", 0.0),
+            eval_time=data.get("eval_time", 0.0),
             dropouts=data.get("dropouts", 0.0),
             optimizer=data.get("optimizer", "sgd"),
             gradient_clip=data.get("gradient_clip", 0.0),
@@ -103,31 +108,46 @@ class GeneticOptimizer:
         print(f"Genesis: Creating initial population of {pop_size} individuals...")
         return [self.generate_random_genome() for _ in range(pop_size)]
 
+    def _sync_if_gpu(self, model: NeuralNetwork):
+        if getattr(model, "uses_gpu", False):
+            xp = getattr(model, "xp", None)
+            try:
+                if xp is not None and hasattr(xp, "cuda"):
+                    xp.cuda.Stream.null.synchronize()
+            except Exception:
+                pass
+
     def evaluate_population(self, population: List[Genome], dataset: ChessDataset):
         print(f"\nStarting Evaluation of {len(population)} individuals...")
         
         for i, genome in enumerate(population):
             if genome.fitness > 0:
-                print(f"Individual {i+1} already evaluated (Fitness: {genome.fitness:.2f}%)")
+                print(f"Individual {i+1} already evaluated (Fitness: {genome.fitness:.2f}% | Time: {genome.eval_time:.2f}s)")
                 continue
             print(f"\nTesting Individual {i+1}/{len(population)}: {genome.hidden_layers} | {genome.activation_fns} | LR: {genome.learning_rate:.5f} | Opt: {genome.optimizer}")
-            model = NeuralNetwork(64, loss_function=loss_functions["cross_entropy"])
+            model = NeuralNetwork(MODEL_INPUT_SIZE, loss_function=loss_functions["cross_entropy"], prefer_gpu=True)
 
             for layer_size, act_name in zip(genome.hidden_layers, genome.activation_fns):
                 model.add_layer(layer_size, activation=activation_functions[act_name], dropout_rate=genome.dropouts, optimizer=genome.optimizer)
 
-            model.add_layer(3, activation=activation_functions["softmax"], optimizer=genome.optimizer)
+            model.add_layer(NUM_CLASSES, activation=activation_functions["softmax"], optimizer=genome.optimizer)
             config = genome.to_config()
+            start_time = time.perf_counter()
             try:
                 accuracy, _ = train_network(model, dataset, config)
-                genome.fitness = accuracy
-                print(f"--> Score: {accuracy:.2f}%")
+                self._sync_if_gpu(model)
+                duration = time.perf_counter() - start_time
+                genome.fitness = round(accuracy, 0)
+                genome.eval_time = duration
+                print(f"--> Score: {accuracy:.2f}% | Time: {duration:.2f}s")
             except Exception as e:
+                self._sync_if_gpu(model)
                 print(f"--> Death by Error: {e}")
                 genome.fitness = 0.0
+                genome.eval_time = time.perf_counter() - start_time
 
     def select_best(self, population: List[Genome]) -> Tuple[List[Genome], List[Genome]]:
-        sorted_pop = sorted(population, key=lambda x: x.fitness, reverse=True)
+        sorted_pop = sorted(population, key=lambda g: (round(g.fitness, 0), -g.eval_time), reverse=True)
         elites = sorted_pop[:self.elite_size]
         print(f"Elites preserved: Top {self.elite_size} with scores {[p.fitness for p in elites]}")
         top_50_percent = int(len(population) * 0.5)
@@ -231,7 +251,10 @@ class GeneticOptimizer:
                 state = json.load(f)
             population = [Genome.from_dict(g) for g in state["population"]]
             generation = state["generation"]
-            print(f"--> Resuming from Generation {generation}")
+            for g in population:
+                g.fitness = 0.0
+                g.eval_time = 0.0
+            print(f"--> Resuming from Generation {generation} (fitness reset to 0 for reevaluation with the new input format)")
             return population, generation
         except Exception as e:
             print(f"Error loading save file: {e}. Starting fresh.")
